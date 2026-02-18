@@ -1,0 +1,67 @@
+const fetch = require('node-fetch');
+const { VersionedTransaction, Connection, Keypair } = require('@solana/web3.js');
+const fs = require('fs');
+const bs58 = require('bs58');
+
+// RPC URL для подключения
+const httpRpcUrl = 'https://quiet-sly-snowflake.solana-mainnet.quiknode.pro/aba5f9905d1a98401bccacc29432c5c07eef11d6';
+
+// Чтение приватного ключа из файла
+const secretKeyString = fs.readFileSync('/home/botadmin/bot-wallet.json', 'utf8');
+const secretKey = Uint8Array.from(JSON.parse(secretKeyString));
+const botKeypair = Keypair.fromSecretKey(secretKey);
+
+// Публичный ключ кошелька
+const publicKey = botKeypair.publicKey.toBase58(); // Генерация публичного ключа из приватного
+
+// Адрес токена
+const tokenMint = 'B6FCYCpCP7ULriKXdtzgAPpRezodBjzC6Watsmoipump'; // Новый токен
+
+// Настройка RPC подключения
+const web3Connection = new Connection(httpRpcUrl, 'confirmed');
+
+// Параметры транзакции
+const transactionParams = {
+  publicKey,             // Публичный ключ кошелька
+  action: "buy",         // Покупка
+  mint: tokenMint,       // Новый токен
+  denominatedInSol: "true", // Сумма в SOL
+  amount: 0.02,          // Количество SOL
+  slippage: 15,          // Проскальзывание (в процентах)
+  priorityFee: 0.00002,  // Приоритетная комиссия
+  pool: "raydium"        // Radium пул
+};
+
+// Функция для получения и отправки транзакции
+async function sendPortalTransaction() {
+  try {
+    // Шаг 1: Получение транзакции
+    const response = await fetch(`https://pumpportal.fun/api/trade-local`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(transactionParams)
+    });
+
+    if (response.status !== 200) {
+      console.error("Ошибка получения транзакции:", response.statusText);
+      return;
+    }
+
+    const serializedTx = await response.arrayBuffer();
+    const tx = VersionedTransaction.deserialize(new Uint8Array(serializedTx));
+
+    // Шаг 2: Подпись транзакции
+    tx.sign([botKeypair]);
+
+    // Шаг 3: Отправка транзакции через RPC
+    const signature = await web3Connection.sendTransaction(tx);
+    console.log(`Транзакция успешно отправлена: https://solscan.io/tx/${signature}`);
+  } catch (error) {
+    console.error("Ошибка выполнения транзакции:", error);
+  }
+}
+
+// Запуск функции
+sendPortalTransaction();
